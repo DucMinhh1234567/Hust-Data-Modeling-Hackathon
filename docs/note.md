@@ -62,8 +62,21 @@ SKU-06780    8.535920e+08
 SKU-00004    8.359968e+08
 dtype: float64
 
-Top 99 SKUs account for 50% of profit
-Top 653 SKUs account for 80% of profit
+Top 99 SKUs account for 50% of profit *(EDA nhanh — xem bảng dưới)*
+Top 653 SKUs account for 80% of profit *(EDA nhanh)*
+
+### Ngưỡng 50% / 80% profit — bao nhiêu SKU?
+
+Cách đếm: sắp xếp SKU theo `profit_pos = max(profit, 0)`, tính `cum_profit_pct`; đếm số SKU có `cum_profit_pct` **vẫn &lt; 50%** (hoặc &lt; 80%) — cùng logic `eda.py` / `build_sku_artifacts.py`.
+
+| Cách tính profit | ~50% profit | ~80% profit | File artifact (`main/output/`) |
+| :--- | ---: | ---: | :--- |
+| **EDA** (`eda.py`: chỉ bỏ dấu `,` ở `Cost Amount`) | **99 SKU** | **653 SKU** | `top50pct_skus_eda.csv`, `top80pct_skus_eda.csv` |
+| **Pipeline** (parse VN đầy đủ — **khớp WRMSSE / notebook**) | **213 SKU** | **1.403 SKU** | `top50pct_skus.csv`, `top80pct_skus.csv` |
+
+**Nên dùng khi modeling:** **213** và **1.403** (pipeline). Số 99 / 653 chỉ đúng với EDA sơ bộ, không trùng weight metric.
+
+*Tham khảo thêm (pipeline, cố định rank): top **99** SKU đứng đầu ≈ **39,7%** profit; top **653** ≈ **67,8%** — không đạt ngưỡng 50%/80%.*
 
 # Metric: WRMSSE
 
@@ -73,9 +86,9 @@ Weighted Root Mean Squared Scaled Error – bình phương sai số dự báo đ
 - RMSSE < 1: Tốt hơn naive – mục tiêu đạt được
 - RMSSE > 1: Tệ hơn naive – cần cải thiện
 
-Tập trung tối ưu dự báo cho Top 653 SKUs (= 80% profit) sẽ có tác động lớn nhất đến WRMSSE. Các SKU còn lại ít ảnh hưởng điểm số.
+Tập trung tối ưu dự báo cho **~1.403 SKU** (= 80% profit, pipeline) sẽ có tác động lớn nhất đến WRMSSE. Các SKU còn lại ít ảnh hưởng điểm số.
 
-Với việc top 653 SKUs = 80% profit, nên tập trung dự báo cho các SKU này, phần này ổn thì có thể tập trung sang các SKUs còn lại.
+Ưu tiên: làm tốt **~213 SKU** (~50% profit) trước, sau đó mở rộng tới ~1.403 SKU (~80%), rồi polish phần còn lại.
 
 # Các vấn đề chính:
 ### 1. Sparsity cực cao: 
@@ -83,19 +96,19 @@ Với việc top 653 SKUs = 80% profit, nên tập trung dự báo cho các SKU 
 
 → Ảnh hưởng:
 - Model học pattern theo thời gian (lag, trend, mùa) rất khó vì chuỗi toàn 0 xen vài điểm bán. (Tất nhiên vẫn có thể xử lý bằng cách clean dữ liệu = 0, nhưng data sẽ ít nhiều bị ảnh hưởng)
-- Dễ dự báo quá cao (mean bị lệch vì vài ngày bán lớn) hoặc quá thấp (toàn 0). (Ảnh hưởng trực tiếp do data long-tail, 653 SKUs chiếm 80% profit)
+- Dễ dự báo quá cao (mean bị lệch vì vài ngày bán lớn) hoặc quá thấp (toàn 0). (Ảnh hưởng trực tiếp do data long-tail: ~1.403 SKU chiếm 80% profit theo pipeline)
 - Naive / LightGBM đều kém trên SKU sparse (vài ngày mới bán 1 lần).
 
 **Cách xử lý đề xuất**: Gộp daily_qty, fill ngày không bán = 0; SKU sparse dùng mean vài tuần cuối hoặc Croston, không ép model phức tạp.
-**Lưu ý**: “Fill ngày không bán = 0”: chuẩn cho demand forecasting; cần calendar đầy đủ mỗi SKU (1411 ngày hoặc range chung) trước khi tính RMSSE denominator (naive trên chuỗi liên tục). Croston / mean vài tuần cho SKU sparse: ổn cho SKU ít ảnh hưởng điểm; top 653 nên model mạnh hơn (LightGBM + lag/rolling trên daily).
+**Lưu ý**: “Fill ngày không bán = 0”: chuẩn cho demand forecasting; cần calendar đầy đủ mỗi SKU (1411 ngày hoặc range chung) trước khi tính RMSSE denominator (naive trên chuỗi liên tục). Croston / mean vài tuần cho SKU sparse: ổn cho SKU ít ảnh hưởng điểm; ~1.403 SKU top profit nên model mạnh hơn (LightGBM + lag/rolling trên daily).
 
 ### 2. Long-tail profit:
-- Lợi nhuận tập trung ít SKU: top 99 SKU ≈ 50% profit, top 653 SKU ≈ 80% profit. Phần còn lại ~15k SKU chia nhau 20% profit.
+- Lợi nhuận tập trung ít SKU (pipeline): **~213 SKU ≈ 50% profit**, **~1.403 SKU ≈ 80% profit**. Phần còn lại ~14,5k SKU chia ~20% profit. *(EDA nhanh ghi 99 / 653 — khác cách parse số, xem bảng trên.)*
 
 → Ảnh hưởng:
 - Metric WRMSSE = trung bình RMSSE có trọng số theo profit → sai dự báo ở SKU lãi lớn làm điểm tổng tệ hơn nhiều so với sai ở SKU nhỏ. -> Model phải đặc biệt chú ý vài SKUs profit cao, tránh overpredict sparse SKUs.
-- Tối ưu “trung bình cho mọi SKU” không tối ưu điểm thi. -> Là tập trung cho 653 SKUs profit cao.
-- Nên ưu tiên thời gian: làm tốt ~100–650 SKU đầu trước khi polish toàn bộ.
+- Tối ưu “trung bình cho mọi SKU” không tối ưu điểm thi. -> Tập trung cho ~1.403 SKU profit cao (pipeline).
+- Nên ưu tiên thời gian: ~213 SKU (~50%) → ~1.403 SKU (~80%) → polish phần còn lại.
 
 **Cách xử lý đề xuất**: List top profit từ EDA, model tốt hơn (LightGBM / tune mean window) cho nhóm này, còn SKU nhỏ dùng rule đơn giản.
 
@@ -121,13 +134,13 @@ Hai dòng submission / SKU: mỗi dòng 28 cột F1..F28 nhưng khung thời gia
 | :--- | :--- |
 | Dự báo demand | `daily_qty` cho **15,972 SKU** × **56 ngày** (2 window × 28 ngày) |
 | Metric | **WRMSSE càng thấp càng tốt**; mục tiêu từng SKU: **RMSSE < 1** (tốt hơn naive) |
-| Ưu tiên điểm | Top **99 SKU** (~50% profit) → top **653 SKU** (~80% profit) trước, rồi polish phần còn lại |
+| Ưu tiên điểm | Top **~213 SKU** (~50%) → **~1.403 SKU** (~80%) trước (pipeline / WRMSSE), rồi polish phần còn lại |
 | Submission hợp lệ | Đủ 31,944 `id`, giá trị **float ≥ 0**, không trùng `id`, khớp `sample_submission.csv` |
 
 ## Mục tiêu theo giai đoạn
 
 1. **EDA & hiểu data** — Hoàn thành phân tích sparsity, profit weight, returns (phần trên). -> ok rồi
 2. **Baseline có điểm** — Pipeline end-to-end + file submission đầu tiên (notebook `auto_parts_demand_eda_wrmsse_baseline.ipynb`).
-3. **Cải thiện top SKU** — Model/features tốt cho ~653 SKU quan trọng nhất.
+3. **Cải thiện top SKU** — Model/features tốt cho ~1.403 SKU (~80% profit, pipeline).
 4. **Tối ưu toàn bộ** — Xử lý SKU sparse, tune, validate local trước khi nộp Private.
 
