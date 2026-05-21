@@ -15,8 +15,7 @@ Repository này dùng để tái hiện kết quả submission cuối cùng cho 
 
 ## 2. Kết quả cuối cùng
 
-- Public score tốt nhất trước khi hiệu chỉnh: **0.48999**
-- Public score sau khi áp dụng SKU correction factor: **0.48599**
+- Public score: **0.48599**
 - Metric: **WRMSSE**.
 
 Pipeline cuối cùng sử dụng:
