@@ -1574,8 +1574,8 @@ def load_train_clean(train_path=TRAIN_PATH):
     df["Date"] = pd.to_datetime(df["Date"])
     df["ItemCode"] = df["ItemCode"].astype(str)
     df["Quantity"] = pd.to_numeric(df["Quantity"], errors="coerce").fillna(0)
-    df["SalesAmount"] = pd.to_numeric(df["SalesAmount"], errors="coerce").fillna(0)
-    df["Cost Amount"] = pd.to_numeric(df["Cost Amount"], errors="coerce").fillna(0)
+    df["SalesAmount"] = parse_vn_number(df["SalesAmount"]).fillna(0)
+    df["Cost Amount"] = parse_vn_number(df["Cost Amount"]).fillna(0)
 
     if "UnitPrice" in df.columns:
         df["UnitPrice_num"] = parse_vn_number(df["UnitPrice"])
